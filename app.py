@@ -102,7 +102,7 @@ with col2:
                 if df_descarga.empty:
                     st.error("No se pudieron recuperar datos para los tickers especificados en esa ventana temporal.")
                 else:
-                    # Blindaje multinivel para aplanar las columnas
+                    # Aplanar las columnas multinivel
                     if isinstance(df_descarga.columns, pd.MultiIndex):
                         datos_mercado = pd.DataFrame(index=df_descarga.index)
                         for t in tickers_a_descargar:
@@ -198,29 +198,25 @@ with col2:
         st.info("Configure los activos y capitales a la izquierda. Al presionar el botón se jalarán los precios históricos reales de Yahoo Finance para simular las curvas operativas.")
 
 # =========================================================================
-# 🎛️ NUEVA SECCIÓN DE INTERACCIÓN GLOBAL (SHARE, COMENTARIOS Y VALORACIÓN)
+# 🎛️ SECCIÓN DE INTERACCIÓN GLOBAL (CORREGIDA)
 # =========================================================================
 st.markdown("---")
 st.markdown("### 🗣️ Interacción y Compartición del Laboratorio")
 
-# Inicializar almacenamiento persistente para comentarios en la sesión actual
 if "historial_comentarios" not in st.session_state:
     st.session_state.historial_comentarios = [
         {"usuario": "Ing. Auditor", "texto": "Filtros de atenuación estocástica operando estables en zonas críticas."},
         {"usuario": "Mesa de Control", "texto": "Se sugiere probar clúster con AVGO y RKLB integradas para validar dispersión."}
     ]
 
-# Crear 3 columnas para la sección social/interactiva
 inf1, inf2 = st.columns([4, 8], gap="medium")
 
 with inf1:
     st.markdown("#### 🔗 Enlace Operativo")
-    # Botón para copiar enlace al portapapeles de forma nativa en la nube
     url_aplicacion = "https://laplanta-jw0612.streamlit.app"
     
     if st.button("🔗 Copiar Enlace de Compartición", use_container_width=True):
         st.toast("¡Enlace copiado al portapapeles con éxito! 🚀", icon="✅")
-        # Inyección mínima para asegurar el guardado de datos en portapapeles del navegador
         st.code(url_aplicacion, language="text")
 
     st.markdown("#### 🎯 Control de Calidad del Modelo")
@@ -231,7 +227,6 @@ with inf1:
 with inf2:
     st.markdown("#### 💬 Bitácora de Comentarios Técnicos")
     
-    # Formulario limpio para ingresar nuevos comentarios
     with st.form("formulario_comentarios", clear_on_submit=True):
         nombre_autor = st.text_input("Identificador / Puesto:", placeholder="Ej. Analista Senior")
         comentario_texto = st.text_area("Notas o Diagnóstico de las Trayectorias:", placeholder="Escribe tus observaciones técnicas aquí...")
@@ -245,15 +240,15 @@ with inf2:
             else:
                 st.warning("El campo de notas no puede estar vacío.")
 
-    # Despliegue dinámico de la lista de comentarios registrados
     st.markdown("**Registro Histórico Reciente:**")
     for c in st.session_state.historial_comentarios:
-        st.markdown(f"**🔹 {c['usuario']}:** {c['text']}")
+        # Corregido de c['text'] a c['texto'] para alinearse con la estructura
+        st.markdown(f"**🔹 {c['usuario']}:** {c['texto']}")
 
 # 5. PIE DE PÁGINA: DISCLAIMER INSTITUCIONAL
 st.markdown("---")
 st.caption("""
-ℹ️ **Disclaimer de Exención de Responsabilidad Técnica:** El presente simulador interactivo constituye un laboratorio de modelado estocástico 
+ℹ️ **Disclaimer de Exención de Responsabilidad Técnico:** El presente simulador interactivo constituye un laboratorio de modelado estocástico 
 y control estadístico de procesos (SPC) aplicado a variables financieras. Los cálculos, rendimientos simulados y gráficas desplegadas son de carácter 
 estrictamente informativo e instruccional para la optimización de algoritmos en lazo cerrado. No representa, bajo ninguna circunstancia, una recomendación 
 u oferta de compra/venta de activos, ni debe interpretarse como asesoría financiera, legal o fiscal. Rendimientos históricos no garantizan rendimientos futuros.
