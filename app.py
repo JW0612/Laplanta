@@ -135,12 +135,19 @@ with col2:
                     # -------------------------------------------------------------------------
                     # LÓGICA ADAPTATIVA: ALGORITMO SPC SIMULADO
                     # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+                    # LÓGICA ADAPTATIVA: ALGORITMO SPC SIMULADO (Ajuste Realista)
+                    # -------------------------------------------------------------------------
                     retornos_planta = retornos_benchmark.values.copy()
                     for t in range(len(retornos_planta)):
-                        if retornos_planta[t] < -0.02: 
-                            retornos_planta[t] = retornos_planta[t] * 0.45  
+                        # Ajuste realista: En lugar de amplificar tanto, 
+                        # el SPC busca reducir la volatilidad y capturar una mejora marginal
+                        if retornos_planta[t] < 0: 
+                            # Mitigación suave (en lugar de 0.45, usamos 0.90 para reducir la pérdida)
+                            retornos_planta[t] = retornos_planta[t] * 0.90  
                         else:
-                            retornos_planta[t] = retornos_planta[t] * 1.15  
+                            # Optimización marginal (en lugar de 1.15, usamos 1.02 para capturar alfa real)
+                            retornos_planta[t] = retornos_planta[t] * 1.02  
                             
                     curva_planta = capital_total_inicial * np.cumprod(1 + retornos_planta)
                     fechas_reales = retornos_diarios.index
