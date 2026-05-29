@@ -5,11 +5,17 @@ import numpy as np
 import plotly.graph_objects as go
 import yfinance as yf
 
-# 1. Configuración de pantalla
+# Configuración inicial
 st.set_page_config(page_title="La Planta | Quant Lab", layout="wide")
 st.title("📈 Sistema Control de Portafolios: Proyecto 'La Planta'")
 
-# 2. Configuración de parámetros
+# Inicializar historial de comentarios con la clave correcta
+if "historial_comentarios" not in st.session_state:
+    st.session_state.historial_comentarios = [
+        {"usuario": "Sistema", "texto": "Laboratorio de control estocástico iniciado."}
+    ]
+
+# Configuración de parámetros
 col1, col2 = st.columns([5, 7])
 with col1:
     fecha_inicio = st.date_input("Fecha de Inicio", value=datetime.date.today() - datetime.timedelta(days=365))
@@ -25,35 +31,47 @@ with col2:
     if correr:
         df_portafolio = pd.DataFrame(datos_usuario)
         tickers = df_portafolio["Activo"].tolist()
-        # Descarga robusta
+        
+        # 1. DESCARGA ROBUSTA Y APLANADO DE COLUMNAS
         raw_data = yf.download(tickers, start=fecha_inicio, progress=False)
         
-        # BLINDAJE DE DATOS: Aplanamos el MultiIndex de Yahoo Finance
+        # Si hay varios activos, Yahoo devuelve MultiIndex; si es uno, devuelve Series/DataFrame plano
         if isinstance(raw_data.columns, pd.MultiIndex):
-            # Nos aseguramos de extraer solo Adj Close y aplanar los nombres
+            # Aplanamos seleccionando 'Adj Close' y asegurando que sea un DataFrame
             df_precios = raw_data['Adj Close']
         else:
             df_precios = raw_data[['Adj Close']]
             
         df_precios = df_precios.ffill().bfill()
         
-        # Lógica de Lazo Cerrado (El "Formato Potente" que te gustaba)
+        # 2. LÓGICA DE CONTROL (LAZO CERRADO)
         pesos = df_portafolio["Monto"].values / df_portafolio["Monto"].sum()
         retornos = df_precios.pct_change().dropna()
         ret_pasivo = retornos.dot(pesos)
         
-        # Algoritmo de control: Momentum adaptativo
+        # Algoritmo: Momentum adaptativo
         ret_activo = ret_pasivo.copy()
         for t in range(len(ret_activo)):
-            if ret_activo[t] > 0: ret_activo[t] *= 1.05  # Captura de momentum
-            else: ret_activo[t] *= 0.85                  # Mitigación de caídas
+            if ret_activo[t] > 0: ret_activo[t] *= 1.05 
+            else: ret_activo[t] *= 0.85                  
         
         capital_inicial = df_portafolio["Monto"].sum()
         curva_activa = capital_inicial * np.cumprod(1 + ret_activo)
         
-        # Gráfico
+        # 3. VISUALIZACIÓN
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=ret_activo.index, y=curva_activa, name="Modelo Adaptativo (Lazo Cerrado)", line=dict(color="#58a6ff")))
+        fig.add_trace(go.Scatter(x=ret_activo.index, y=curva_activa, name="Modelo Adaptativo", line=dict(color="#58a6ff")))
         fig.update_layout(template="plotly_dark", title="Trayectoria Adaptativa 'La Planta'")
         st.plotly_chart(fig, use_container_width=True)
         st.metric("Resultado del Lazo Cerrado", f"${curva_activa.iloc[-1]:,.2f}")
+
+    # 4. BITÁCORA DE COMENTARIOS (CORREGIDA)
+    st.markdown("### 💬 Bitácora Técnica")
+    with st.form("comentarios_form", clear_on_submit=True):
+        usr = st.text_input("Usuario")
+        txt = st.text_area("Comentario")
+        if st.form_submit_button("Registrar"):
+            st.session_state.historial_comentarios.insert(0, {"usuario": usr, "texto": txt})
+    
+    for c in st.session_state.historial_comentarios:
+        st.markdown(f"**{c['usuario']}**: {c['texto']}") # Usamos 'texto' correctamente
