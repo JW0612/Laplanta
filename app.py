@@ -9,7 +9,7 @@ import yfinance as yf
 st.set_page_config(page_title="La Planta | Quant Lab", layout="wide")
 st.title("📈 Sistema Control de Portafolios: Proyecto 'La Planta'")
 
-# Inicializar historial de comentarios con la clave correcta
+# Inicializar historial con la clave 'texto'
 if "historial_comentarios" not in st.session_state:
     st.session_state.historial_comentarios = [
         {"usuario": "Sistema", "texto": "Laboratorio de control estocástico iniciado."}
@@ -32,15 +32,15 @@ with col2:
         df_portafolio = pd.DataFrame(datos_usuario)
         tickers = df_portafolio["Activo"].tolist()
         
-        # 1. DESCARGA ROBUSTA Y APLANADO DE COLUMNAS
+        # 1. DESCARGA Y APLANADO DE DATOS (BLINDAJE)
         raw_data = yf.download(tickers, start=fecha_inicio, progress=False)
         
-        # Si hay varios activos, Yahoo devuelve MultiIndex; si es uno, devuelve Series/DataFrame plano
-        if isinstance(raw_data.columns, pd.MultiIndex):
-            # Aplanamos seleccionando 'Adj Close' y asegurando que sea un DataFrame
-            df_precios = raw_data['Adj Close']
+        # Si 'Adj Close' no está en el primer nivel, buscamos en los niveles internos
+        if 'Adj Close' not in raw_data.columns:
+            # Aplanar MultiIndex si existe
+            df_precios = raw_data.xs('Adj Close', axis=1, level=0, drop_level=True)
         else:
-            df_precios = raw_data[['Adj Close']]
+            df_precios = raw_data['Adj Close']
             
         df_precios = df_precios.ffill().bfill()
         
@@ -74,4 +74,5 @@ with col2:
             st.session_state.historial_comentarios.insert(0, {"usuario": usr, "texto": txt})
     
     for c in st.session_state.historial_comentarios:
-        st.markdown(f"**{c['usuario']}**: {c['texto']}") # Usamos 'texto' correctamente
+        # Usamos 'texto' tal como se definió al insertar
+        st.markdown(f"**{c['usuario']}**: {c['texto']}")
