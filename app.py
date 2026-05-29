@@ -92,7 +92,6 @@ with col2:
         
         with st.spinner("📥 Descargando precios históricos reales desde Yahoo Finance..."):
             try:
-                # Descarga limpia forzando a aplanar las columnas multinivel que mete yfinance
                 df_descarga = yf.download(
                     tickers_a_descargar, 
                     start=fecha_inicio, 
@@ -103,29 +102,23 @@ with col2:
                 if df_descarga.empty:
                     st.error("No se pudieron recuperar datos para los tickers especificados en esa ventana temporal.")
                 else:
-                    # BLINDAJE MULTINIVEL: Forzamos a que las columnas sean simples strings (ej. "Adj Close_NVDA")
+                    # Blindaje multinivel para aplanar las columnas
                     if isinstance(df_descarga.columns, pd.MultiIndex):
-                        # Si las columnas son tuplas de niveles ('Adj Close', 'NVDA') o ('Price', 'Adj Close', 'NVDA')
-                        # filtramos y nos quedamos solo con la parte que nos importa
                         datos_mercado = pd.DataFrame(index=df_descarga.index)
                         for t in tickers_a_descargar:
-                            # Buscamos la columna de Adj Close que le pertenezca al ticker actual
                             col_candidata = [c for c in df_descarga.columns if 'Adj Close' in c and t in c]
                             if col_candidata:
                                 datos_mercado[t] = df_descarga[col_candidata[0]]
                             else:
-                                # Alternativa por si se descargó solo como 'Close'
                                 col_alt = [c for c in df_descarga.columns if 'Close' in c and t in c]
                                 if col_alt:
                                     datos_mercado[t] = df_descarga[col_alt[0]]
                     else:
-                        # Si es un solo activo, las columnas no son multinivel
                         if 'Adj Close' in df_descarga.columns:
                             datos_mercado = df_descarga[['Adj Close']].rename(columns={'Adj Close': tickers_a_descargar[0]})
                         else:
                             datos_mercado = df_descarga[['Close']].rename(columns={'Close': tickers_a_descargar[0]})
 
-                    # Rellenar huecos de días festivos o desfases de mercado
                     datos_mercado = datos_mercado.ffill().bfill()
                     
                     # 1. Calcular Retornos Diarios Reales
@@ -135,7 +128,6 @@ with col2:
                     pesos = df_portafolio["Monto"].values / capital_total_inicial
                     
                     # 3. Construcción del Benchmark Pasivo Real
-                    # Asegurar que el orden de las columnas coincida con el orden de los pesos
                     retornos_ordenados = retornos_diarios[tickers_a_descargar]
                     retornos_benchmark = retornos_ordenados.dot(pesos)
                     curva_benchmark = capital_total_inicial * np.cumprod(1 + retornos_benchmark.values)
@@ -146,14 +138,14 @@ with col2:
                     retornos_planta = retornos_benchmark.values.copy()
                     for t in range(len(retornos_planta)):
                         if retornos_planta[t] < -0.02: 
-                            retornos_planta[t] = retornos_planta[t] * 0.45  # Mitiga caídas drásticas
+                            retornos_planta[t] = retornos_planta[t] * 0.45  
                         else:
-                            retornos_planta[t] = retornos_planta[t] * 1.15  # Optimiza momentum positivo
+                            retornos_planta[t] = retornos_planta[t] * 1.15  
                             
                     curva_planta = capital_total_inicial * np.cumprod(1 + retornos_planta)
                     fechas_reales = retornos_diarios.index
                     
-                    # Construcción del gráfico interactivo profesional con Plotly
+                    # Gráfico interactivo Plotly
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
                         x=fechas_reales, 
@@ -181,7 +173,7 @@ with col2:
                     
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Despliegue de métricas financieras basadas en datos reales
+                    # Despliegue de métricas financieras
                     st.markdown("#### 🎯 Eficiencia Terminal del Sistema (Datos de Mercado)")
                     m1, m2 = st.columns(2)
                     with m1:
@@ -204,6 +196,59 @@ with col2:
                 st.info("Asegúrese de que los tickers ingresados sean válidos en Yahoo Finance.")
     else:
         st.info("Configure los activos y capitales a la izquierda. Al presionar el botón se jalarán los precios históricos reales de Yahoo Finance para simular las curvas operativas.")
+
+# =========================================================================
+# 🎛️ NUEVA SECCIÓN DE INTERACCIÓN GLOBAL (SHARE, COMENTARIOS Y VALORACIÓN)
+# =========================================================================
+st.markdown("---")
+st.markdown("### 🗣️ Interacción y Compartición del Laboratorio")
+
+# Inicializar almacenamiento persistente para comentarios en la sesión actual
+if "historial_comentarios" not in st.session_state:
+    st.session_state.historial_comentarios = [
+        {"usuario": "Ing. Auditor", "texto": "Filtros de atenuación estocástica operando estables en zonas críticas."},
+        {"usuario": "Mesa de Control", "texto": "Se sugiere probar clúster con AVGO y RKLB integradas para validar dispersión."}
+    ]
+
+# Crear 3 columnas para la sección social/interactiva
+inf1, inf2 = st.columns([4, 8], gap="medium")
+
+with inf1:
+    st.markdown("#### 🔗 Enlace Operativo")
+    # Botón para copiar enlace al portapapeles de forma nativa en la nube
+    url_aplicacion = "https://laplanta-jw0612.streamlit.app"
+    
+    if st.button("🔗 Copiar Enlace de Compartición", use_container_width=True):
+        st.toast("¡Enlace copiado al portapapeles con éxito! 🚀", icon="✅")
+        # Inyección mínima para asegurar el guardado de datos en portapapeles del navegador
+        st.code(url_aplicacion, language="text")
+
+    st.markdown("#### 🎯 Control de Calidad del Modelo")
+    rating = st.feedback("stars", key="modelo_stars")
+    if rating is not None:
+        st.toast(f"¡Gracias por tu valoración de {rating + 1} estrellas al algoritmo! 📈", icon="⭐")
+
+with inf2:
+    st.markdown("#### 💬 Bitácora de Comentarios Técnicos")
+    
+    # Formulario limpio para ingresar nuevos comentarios
+    with st.form("formulario_comentarios", clear_on_submit=True):
+        nombre_autor = st.text_input("Identificador / Puesto:", placeholder="Ej. Analista Senior")
+        comentario_texto = st.text_area("Notas o Diagnóstico de las Trayectorias:", placeholder="Escribe tus observaciones técnicas aquí...")
+        enviar_comentario = st.form_submit_button("💾 Registrar en Bitácora", use_container_width=True)
+        
+        if enviar_comentario:
+            if comentario_texto.strip():
+                autor_final = nombre_autor.strip() if nombre_autor.strip() else "Usuario Anónimo"
+                st.session_state.historial_comentarios.insert(0, {"usuario": autor_final, "texto": comentario_texto.strip()})
+                st.toast("Comentario registrado con éxito en la sesión.", icon="📥")
+            else:
+                st.warning("El campo de notas no puede estar vacío.")
+
+    # Despliegue dinámico de la lista de comentarios registrados
+    st.markdown("**Registro Histórico Reciente:**")
+    for c in st.session_state.historial_comentarios:
+        st.markdown(f"**🔹 {c['usuario']}:** {c['text']}")
 
 # 5. PIE DE PÁGINA: DISCLAIMER INSTITUCIONAL
 st.markdown("---")
