@@ -22,7 +22,7 @@ with st.expander("📖 Guía de Operación e Instrucciones de la Planta", expand
     st.markdown("""
     Este simulador evalúa la densidad probabilística y la persistencia temporal de una masa de capital expuesta a activos reales del mercado tecnológico y de infraestructura.
     1. **Establezca la ventana temporal:** Por defecto el sistema calcula un retraso óptimo de 1 año atrás a la fecha actual.
-    2. **Defina el tamaño del clúster:** Seleccione la cantidad de cuentas o nodos de activos que desea simular (Mínimo 3, Maximó 7).
+    2. **Defina el tamaño del clúster:** Seleccione la cantidad de cuentas o nodos de activos que desea simular (Mínimo 3, Máximo 7).
     3. **Asigne Tickers y Masa de Capital:** Introduzca las siglas del activo (ej. *NVDA*, *MU*, *RKLB*, *AVGO*). El sistema jalará los datos de cierre reales de Yahoo Finance.
     4. **Ejecute el Algoritmo:** El sistema procesará las trayectorias reales aplicando filtros para mitigar el *volatility decay*.
     """)
@@ -92,41 +92,52 @@ with col2:
         
         with st.spinner("📥 Descargando precios históricos reales desde Yahoo Finance..."):
             try:
-                # Descarga masiva con formato explícito para evitar problemas de índices multinivel
+                # Descarga limpia forzando a aplanar las columnas multinivel que mete yfinance
                 df_descarga = yf.download(
                     tickers_a_descargar, 
                     start=fecha_inicio, 
-                    end=fecha_hoy, 
-                    group_by='ticker',  # Agrupamos por ticker para extraer de forma segura
+                    end=fecha_hoy,
                     progress=False
                 )
                 
                 if df_descarga.empty:
                     st.error("No se pudieron recuperar datos para los tickers especificados en esa ventana temporal.")
                 else:
-                    # Construir un DataFrame limpio con el Cierre Ajustado de cada ticker
-                    datos_mercado = pd.DataFrame(index=df_descarga.index)
-                    
-                    for ticker in tickers_a_descargar:
-                        if len(tickers_a_descargar) == 1:
-                            # Si es un solo activo, yfinance no crea jerarquía de nombres
-                            datos_mercado[ticker] = df_descarga['Adj Close']
+                    # BLINDAJE MULTINIVEL: Forzamos a que las columnas sean simples strings (ej. "Adj Close_NVDA")
+                    if isinstance(df_descarga.columns, pd.MultiIndex):
+                        # Si las columnas son tuplas de niveles ('Adj Close', 'NVDA') o ('Price', 'Adj Close', 'NVDA')
+                        # filtramos y nos quedamos solo con la parte que nos importa
+                        datos_mercado = pd.DataFrame(index=df_descarga.index)
+                        for t in tickers_a_descargar:
+                            # Buscamos la columna de Adj Close que le pertenezca al ticker actual
+                            col_candidata = [c for c in df_descarga.columns if 'Adj Close' in c and t in c]
+                            if col_candidata:
+                                datos_mercado[t] = df_descarga[col_candidata[0]]
+                            else:
+                                # Alternativa por si se descargó solo como 'Close'
+                                col_alt = [c for c in df_descarga.columns if 'Close' in c and t in c]
+                                if col_alt:
+                                    datos_mercado[t] = df_descarga[col_alt[0]]
+                    else:
+                        # Si es un solo activo, las columnas no son multinivel
+                        if 'Adj Close' in df_descarga.columns:
+                            datos_mercado = df_descarga[['Adj Close']].rename(columns={'Adj Close': tickers_a_descargar[0]})
                         else:
-                            # Si son varios, extraemos la columna correspondiente de su jerarquía
-                            if ticker in df_descarga.columns.levels[0]:
-                                datos_mercado[ticker] = df_descarga[ticker]['Adj Close']
-                    
-                    # Rellenar huecos de días festivos o diferencias de mercado
+                            datos_mercado = df_descarga[['Close']].rename(columns={'Close': tickers_a_descargar[0]})
+
+                    # Rellenar huecos de días festivos o desfases de mercado
                     datos_mercado = datos_mercado.ffill().bfill()
                     
                     # 1. Calcular Retornos Diarios Reales
                     retornos_diarios = datos_mercado.pct_change().dropna()
                     
-                    # 2. Calcular Pesos Iniciales del Portafolio del usuario
+                    # 2. Calcular Pesos Iniciales del Portafolio
                     pesos = df_portafolio["Monto"].values / capital_total_inicial
                     
                     # 3. Construcción del Benchmark Pasivo Real
-                    retornos_benchmark = retornos_diarios.dot(pesos)
+                    # Asegurar que el orden de las columnas coincida con el orden de los pesos
+                    retornos_ordenados = retornos_diarios[tickers_a_descargar]
+                    retornos_benchmark = retornos_ordenados.dot(pesos)
                     curva_benchmark = capital_total_inicial * np.cumprod(1 + retornos_benchmark.values)
                     
                     # -------------------------------------------------------------------------
