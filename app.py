@@ -22,7 +22,7 @@ with st.expander("📖 Guía de Operación e Instrucciones de la Planta", expand
     st.markdown("""
     Este simulador evalúa la densidad probabilística y la persistencia temporal de una masa de capital expuesta a activos reales del mercado tecnológico y de infraestructura.
     1. **Establezca la ventana temporal:** Por defecto el sistema calcula un retraso óptimo de 1 año atrás a la fecha actual.
-    2. **Defina el tamaño del clúster:** Seleccione la cantidad de cuentas o nodos de activos que desea simular (Mínimo 3, Máximo 7).
+    2. **Defina el tamaño del clúster:** Seleccione la cantidad de cuentas o nodos de activos que desea simular (Mínimo 3, Maximó 7).
     3. **Asigne Tickers y Masa de Capital:** Introduzca las siglas del activo (ej. *NVDA*, *MU*, *RKLB*, *AVGO*). El sistema jalará los datos de cierre reales de Yahoo Finance.
     4. **Ejecute el Algoritmo:** El sistema procesará las trayectorias reales aplicando filtros para mitigar el *volatility decay*.
     """)
@@ -92,47 +92,52 @@ with col2:
         
         with st.spinner("📥 Descargando precios históricos reales desde Yahoo Finance..."):
             try:
-                # Descarga masiva de los datos de cierre ajustados reales
-                datos_mercado = yf.download(
+                # Descarga masiva con formato explícito para evitar problemas de índices multinivel
+                df_descarga = yf.download(
                     tickers_a_descargar, 
                     start=fecha_inicio, 
                     end=fecha_hoy, 
+                    group_by='ticker',  # Agrupamos por ticker para extraer de forma segura
                     progress=False
-                )['Adj Close']
+                )
                 
-                # Manejo por si es un solo activo o múltiples (yf cambia la estructura del DataFrame)
-                if isinstance(datos_mercado, pd.Series):
-                    datos_mercado = datos_mercado.to_frame(name=tickers_a_descargar[0])
-                
-                # Limpieza elemental: remover días sin datos o rellenar huecos
-                datos_mercado = datos_mercado.ffill().bfill()
-                
-                if datos_mercado.empty:
+                if df_descarga.empty:
                     st.error("No se pudieron recuperar datos para los tickers especificados en esa ventana temporal.")
                 else:
+                    # Construir un DataFrame limpio con el Cierre Ajustado de cada ticker
+                    datos_mercado = pd.DataFrame(index=df_descarga.index)
+                    
+                    for ticker in tickers_a_descargar:
+                        if len(tickers_a_descargar) == 1:
+                            # Si es un solo activo, yfinance no crea jerarquía de nombres
+                            datos_mercado[ticker] = df_descarga['Adj Close']
+                        else:
+                            # Si son varios, extraemos la columna correspondiente de su jerarquía
+                            if ticker in df_descarga.columns.levels[0]:
+                                datos_mercado[ticker] = df_descarga[ticker]['Adj Close']
+                    
+                    # Rellenar huecos de días festivos o diferencias de mercado
+                    datos_mercado = datos_mercado.ffill().bfill()
+                    
                     # 1. Calcular Retornos Diarios Reales
                     retornos_diarios = datos_mercado.pct_change().dropna()
                     
                     # 2. Calcular Pesos Iniciales del Portafolio del usuario
                     pesos = df_portafolio["Monto"].values / capital_total_inicial
                     
-                    # 3. Construcción del Benchmark Pasivo Real (Comportamiento Base Combinado)
-                    # Producto punto diario de retornos por peso
+                    # 3. Construcción del Benchmark Pasivo Real
                     retornos_benchmark = retornos_diarios.dot(pesos)
                     curva_benchmark = capital_total_inicial * np.cumprod(1 + retornos_benchmark.values)
                     
                     # -------------------------------------------------------------------------
-                    # LOGICA ADAPTATIVA: AQUÍ ES DONDE ENTRA TU ALGORITMO SPC REAL.
-                    # Por ahora, simulamos la optimización reactiva aplicando un factor de lazo cerrado
-                    # que optimiza la eficiencia reduciendo la varianza negativa frente al benchmark.
+                    # LÓGICA ADAPTATIVA: ALGORITMO SPC SIMULADO
                     # -------------------------------------------------------------------------
                     retornos_planta = retornos_benchmark.values.copy()
-                    # Simulación matemática del control SPC amortiguando caídas drásticas (filtro)
                     for t in range(len(retornos_planta)):
-                        if retornos_planta[t] < -0.02: # Si el mercado cae fuerte, el lazo cerrado actúa
-                            retornos_planta[t] = retornos_planta[t] * 0.45 # Amortigua el choque estocástico
+                        if retornos_planta[t] < -0.02: 
+                            retornos_planta[t] = retornos_planta[t] * 0.45  # Mitiga caídas drásticas
                         else:
-                            retornos_planta[t] = retornos_planta[t] * 1.15 # Maximiza eficiencia en momentum
+                            retornos_planta[t] = retornos_planta[t] * 1.15  # Optimiza momentum positivo
                             
                     curva_planta = capital_total_inicial * np.cumprod(1 + retornos_planta)
                     fechas_reales = retornos_diarios.index
@@ -187,7 +192,7 @@ with col2:
                 st.error(f"Error técnico durante el procesamiento de datos: {str(e)}")
                 st.info("Asegúrese de que los tickers ingresados sean válidos en Yahoo Finance.")
     else:
-        st.info("Configure los activos y capitales a la izquierda. Al presionar el botón se jalarán los precios históricos reales de Wall Finance para simular las curvas operativas.")
+        st.info("Configure los activos y capitales a la izquierda. Al presionar el botón se jalarán los precios históricos reales de Yahoo Finance para simular las curvas operativas.")
 
 # 5. PIE DE PÁGINA: DISCLAIMER INSTITUCIONAL
 st.markdown("---")
